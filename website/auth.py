@@ -1,6 +1,5 @@
 import json
 import os
-import string
 
 import requests
 from flask import Blueprint, render_template, request, flash, redirect, url_for
@@ -50,16 +49,17 @@ def callback():
     client.parse_request_body_response(json.dumps(token_response.json()))
     userinfo_endpoint = google_provider_config['userinfo_endpoint']
     uri, headers, body = client.add_token(userinfo_endpoint)
-    userinfo_response = requests.get(uri, headers=headers, data=body)
-    if userinfo_response.json().get('email_verified'):
-        # unique_id = userinfo_response.json()['sub']
-        users_email = userinfo_response.json()['email']
-        # picture = userinfo_response.json()['picture']
-        users_name = userinfo_response.json()['given_name']
+    userinfo_response = requests.get(uri, headers=headers, data=body).json()
+    if userinfo_response.get('email_verified'):
+        # unique_id = userinfo_response['sub']
+        users_email = userinfo_response['email']
+        # picture = userinfo_response['picture']
+        first_name = userinfo_response['given_name']
+        last_name = userinfo_response['family_name']
         user = User.query.filter_by(email=users_email).first()
         if not user:
-            user = User(email=users_email, password='', first_name=users_name,
-                        last_name='', phone='', type='GOOGLE')
+            user = User(email=users_email, password='', first_name=first_name,
+                        last_name=last_name, phone='', type='GOOGLE')
             db.session.add(user)
             db.session.commit()
         if user.type != "GOOGLE":
@@ -71,7 +71,8 @@ def callback():
     else:
         flash('Unable to login', category='error')
     if current_user.is_authenticated:
-        return redirect(url_for('views.home'))
+        # return redirect(url_for('views.home'))
+        return render_template("home.html", user=current_user)
     else:
         return render_template("login.html", user=current_user)
 
@@ -88,7 +89,8 @@ def login():
         user = User.query.filter_by(email=email).first()
         if user:
             if user.type == "GOOGLE":
-                flash('It appears you have used Google to sign in before. Please try using Google sign in.', category='error')
+                flash('It appears you have used Google to sign in before. Please try using Google sign in.',
+                      category='error')
             elif check_password_hash(user.password, password):
                 flash('Logged in successfully', category='success')
                 login_user(user, remember=True)
@@ -98,7 +100,8 @@ def login():
         else:
             flash('User does not exist', category='error')
     if current_user.is_authenticated:
-        return redirect(url_for('views.home'))
+        # return redirect(url_for('views.home'))
+        return render_template("home.html", user=current_user)
     else:
         return render_template("login.html", user=current_user)
 
@@ -133,5 +136,6 @@ def signup():
             db.session.commit()
             flash('Account created', category='success')
             login_user(user, remember=True)
-            return redirect(url_for('views.home'))
+            # return redirect(url_for('views.home'))
+            return render_template("home.html", user=current_user)
     return render_template("sign_up.html", user=current_user)
