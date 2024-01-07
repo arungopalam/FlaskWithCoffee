@@ -62,9 +62,12 @@ def callback():
                         last_name='', phone='', type='GOOGLE')
             db.session.add(user)
             db.session.commit()
-        flash('Signed in successfully', category='success')
-        login_user(user, remember=True)
-        return redirect(url_for('views.home'))
+        if user.type != "GOOGLE":
+            flash('Looks like you have signed in using username and password before, try logging in using username '
+                  'and password combination', category='error')
+        else:
+            flash('Signed in successfully', category='success')
+            login_user(user, remember=True)
     else:
         flash('Unable to login', category='error')
     if current_user.is_authenticated:
@@ -119,7 +122,7 @@ def signup():
 
         user = User.query.filter_by(email=email).first()
         if user:
-            flash('Email already registered', category='success')
+            flash('Email already registered, or could have used Google sign in before.', category='success')
         elif len(email) < 4:
             flash('Email must be greater than 3 characters', category='error')
         elif password != confirm:
