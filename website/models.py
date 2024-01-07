@@ -9,3 +9,4 @@ class User(db.Model, UserMixin):
     first_name = db.Column(db.String(150))
     last_name = db.Column(db.String(150))
     phone = db.Column(db.String(50))
+    type = db.Column(db.String(10))

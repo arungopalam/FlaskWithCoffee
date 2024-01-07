@@ -1,10 +1,79 @@
+import json
+import os
+
+import requests
 from flask import Blueprint, render_template, request, flash, redirect, url_for
+from oauthlib.oauth2 import WebApplicationClient
+
 from .models import User
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import login_required, login_user, logout_user, current_user
 from website import db
 
 auth = Blueprint('auth', __name__)
+GOOGLE_DISCOVERY_URL = (
+    "https://accounts.google.com/.well-known/openid-configuration"
+)
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', None)
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', None)
+client = WebApplicationClient(GOOGLE_CLIENT_ID)
+
+
+@auth.route('/google', methods=['GET'])
+def google():
+    google_provider_config = get_google_provider_config()
+    authorization_endpoint = google_provider_config['authorization_endpoint']
+    return redirect(client.prepare_request_uri(authorization_endpoint,
+                                               request.host_url + "callback",
+                                               ['openid', 'email', 'profile'])
+                    )
+
+
+@auth.route('/callback')
+def callback():
+    code = request.args.get('code')
+    google_provider_config = get_google_provider_config()
+    token_endpoint = google_provider_config['token_endpoint']
+    token_url, headers, body = client.prepare_token_request(
+        token_endpoint,
+        authorization_response=request.url,
+        redirect_url=request.base_url,
+        code=code
+    )
+    token_response = requests.post(
+        token_url,
+        headers=headers,
+        data=body,
+        auth=(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+    )
+    client.parse_request_body_response(json.dumps(token_response.json()))
+    userinfo_endpoint = google_provider_config['userinfo_endpoint']
+    uri, headers, body = client.add_token(userinfo_endpoint)
+    userinfo_response = requests.get(uri, headers=headers, data=body)
+    if userinfo_response.json().get('email_verified'):
+        # unique_id = userinfo_response.json()['sub']
+        users_email = userinfo_response.json()['email']
+        # picture = userinfo_response.json()['picture']
+        users_name = userinfo_response.json()['given_name']
+        user = User.query.filter_by(email=users_email).first()
+        if not user:
+            user = User(email=users_email, password='', first_name=users_name,
+                        last_name='', phone='', type='GOOGLE')
+            db.session.add(user)
+            db.session.commit()
+        flash('Signed in successfully', category='success')
+        login_user(user, remember=True)
+        return redirect(url_for('views.home'))
+    else:
+        flash('Unable to login', category='error')
+    if current_user.is_authenticated:
+        return redirect(url_for('views.home'))
+    else:
+        return render_template("login.html", user=current_user)
+
+
+def get_google_provider_config():
+    return requests.get(GOOGLE_DISCOVERY_URL).json()
 
 
 @auth.route('/login', methods=['GET', 'POST'])
@@ -22,7 +91,10 @@ def login():
                 flash('Invalid password', category='error')
         else:
             flash('User does not exist', category='error')
-    return render_template("login.html", user=current_user)
+    if current_user.is_authenticated:
+        return redirect(url_for('views.home'))
+    else:
+        return render_template("login.html", user=current_user)
 
 
 @auth.route('/logout')
@@ -50,7 +122,8 @@ def signup():
         elif password != confirm:
             flash('Passwords dont match', category='error')
         else:
-            user = User(email=email, password=generate_password_hash(password), first_name=firstName, last_name=lastName, phone=phone)
+            user = User(email=email, password=generate_password_hash(password), first_name=firstName,
+                        last_name=lastName, phone=phone, type='CUSTOM')
             db.session.add(user)
             db.session.commit()
             flash('Account created', category='success')
