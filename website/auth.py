@@ -1,5 +1,6 @@
 import json
 import os
+import string
 
 import requests
 from flask import Blueprint, render_template, request, flash, redirect, url_for
@@ -83,7 +84,9 @@ def login():
         password = request.form.get("password")
         user = User.query.filter_by(email=email).first()
         if user:
-            if check_password_hash(user.password, password):
+            if user.type == "GOOGLE":
+                flash('It appears you have used Google to sign in before. Please try using Google sign in.', category='error')
+            elif check_password_hash(user.password, password):
                 flash('Logged in successfully', category='success')
                 login_user(user, remember=True)
                 return redirect(url_for('views.home'))
