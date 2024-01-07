@@ -119,7 +119,6 @@ def signup():
         password = request.form.get("password")
         confirm = request.form.get("confirm")
         phone = request.form.get("phone")
-
         user = User.query.filter_by(email=email).first()
         if user:
             flash('Email already registered, or could have used Google sign in before.', category='success')
